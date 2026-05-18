@@ -1,0 +1,17 @@
+<dependencies>
+  <androidPackages>
+    <repositories>
+      <repository>https://raw.githubusercontent.com/xsolla/xsolla-offerwall-android-maven/main</repository>
+      <repository>https://raw.githubusercontent.com/xsolla/xsolla-sdk-android/main</repository>
+    </repositories>
+    <androidPackage spec="com.xsolla.android:offerwall:0.1.3"/>
+  </androidPackages>
+  <remoteSwiftPackage url="https://github.com/xsolla/xsolla-offerwall-ios-swift-package.git"
+                      version="0.1.1">
+    <swiftPackage name="XsollaOfferwallSDK"/>
+  </remoteSwiftPackage>
+  <remoteSwiftPackage url="https://github.com/xsolla/xsolla-sdk-ios.git"
+                      version="3.9.2">
+    <swiftPackage name="XsollaMobileSDK"/>
+  </remoteSwiftPackage>
+</dependencies>
