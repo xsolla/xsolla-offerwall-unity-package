@@ -16,13 +16,29 @@ namespace Xsolla.Offerwall
         private static readonly object _lock = new object();
 
         /// <summary>
+        /// Automatically initialises the dispatcher on the main thread at app startup,
+        /// before any scene is loaded. This prevents the race condition where a native
+        /// background callback (e.g. onClosed from Android) calls Enqueue() before the
+        /// instance exists and tries to create a GameObject off the main thread.
+        /// </summary>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        private static void Initialize()
+        {
+            if (_instance != null) return;
+
+            var go = new GameObject("[XsollaOfferwall.MainThreadDispatcher]");
+            DontDestroyOnLoad(go);
+            go.hideFlags = HideFlags.HideAndDontSave;
+            _instance = go.AddComponent<MainThreadDispatcher>();
+        }
+
+        /// <summary>
         /// Enqueue an action to be executed on the main thread.
+        /// Safe to call from any thread.
         /// </summary>
         public static void Enqueue(Action action)
         {
             if (action == null) return;
-
-            EnsureInstance();
 
             lock (_lock)
             {
@@ -47,16 +63,6 @@ namespace Xsolla.Offerwall
                     }
                 }
             }
-        }
-
-        private static void EnsureInstance()
-        {
-            if (_instance != null) return;
-
-            var go = new GameObject("[XsollaOfferwall.MainThreadDispatcher]");
-            DontDestroyOnLoad(go);
-            go.hideFlags = HideFlags.HideAndDontSave;
-            _instance = go.AddComponent<MainThreadDispatcher>();
         }
     }
 }

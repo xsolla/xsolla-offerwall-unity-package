@@ -1,8 +1,12 @@
- using System.Collections.Generic;
+using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using Xsolla.Offerwall;
+#if UNITY_IOS && IOS_SUPPORT_AVAILABLE
+using Unity.Advertisement.IosSupport;
+#endif
 
 public class OfferwallTestUI : MonoBehaviour
 {
@@ -21,6 +25,9 @@ public class OfferwallTestUI : MonoBehaviour
     [SerializeField] private string customParamValue = "unity_test";
 
     private Text _statusLabel;
+    private Text _connectStatusLabel;
+    private Text _androidDeviceIdLabel;
+    private Text _attStatusLabel;
     private Text _logText;
     private ScrollRect _logScrollRect;
     private InputField _placementIdInput;
@@ -31,6 +38,7 @@ public class OfferwallTestUI : MonoBehaviour
     private static readonly Color ColorSectionBg = Color.white;
     private static readonly Color ColorSectionHeader = new Color(0.4f, 0.4f, 0.45f);
     private static readonly Color ColorBlue = new Color(0.2f, 0.5f, 1f);
+    private static readonly Color ColorGreen = new Color(0.15f, 0.65f, 0.45f);
     private static readonly Color ColorPurple = new Color(0.55f, 0.35f, 0.85f);
     private static readonly Color ColorOrange = new Color(0.95f, 0.6f, 0.2f);
     private static readonly Color ColorRed = new Color(0.9f, 0.3f, 0.3f);
@@ -109,6 +117,45 @@ public class OfferwallTestUI : MonoBehaviour
         CreateSpacer(configSection.transform, 12);
         CreateFieldLabel(configSection.transform, "User ID");
         _userIdInput = CreateInputField(configSection.transform, userId);
+        XsollaOfferwall.SetUserId(userId);
+        _userIdInput.onValueChanged.AddListener(value =>
+        {
+            userId = value;
+            XsollaOfferwall.SetUserId(value);
+        });
+        CreateSpacer(contentParent, 20);
+
+        // Device Identifiers section — Android only, hidden on all other platforms
+        if (Application.platform == RuntimePlatform.Android)
+        {
+            var deviceIdsSection = CreateSection(contentParent, "Device Identifiers");
+            _androidDeviceIdLabel = CreateLabel(deviceIdsSection.transform, GetAndroidDeviceIdStateText(),
+                26, FontStyle.Normal, ColorGray, TextAnchor.MiddleLeft);
+            CreateSpacer(deviceIdsSection.transform, 10);
+            CreateHorizontalButtonPair(deviceIdsSection.transform,
+                "Enable", ColorBlue, EnableAndroidDeviceId,
+                "Disable", ColorRed, DisableAndroidDeviceId);
+            CreateSpacer(contentParent, 20);
+        }
+
+#if UNITY_IOS && IOS_SUPPORT_AVAILABLE
+        // App Tracking Transparency section — iOS only
+        {
+            var attSection = CreateSection(contentParent, "App Tracking Transparency");
+            _attStatusLabel = CreateLabel(attSection.transform, "Status: Not Requested",
+                26, FontStyle.Normal, ColorGray, TextAnchor.MiddleLeft);
+            CreateSpacer(attSection.transform, 10);
+            CreateActionButton(attSection.transform, "Request ATT Authorization",
+                "Shows the iOS tracking prompt", ColorPurple, RequestAttAuthorization);
+            CreateSpacer(contentParent, 20);
+        }
+#endif
+
+        // Connection section
+        var connectSection = CreateSection(contentParent, "Connection");
+        _connectStatusLabel = CreateLabel(connectSection.transform, "Not connected", 26, FontStyle.Normal, ColorGray, TextAnchor.MiddleLeft);
+        CreateSpacer(connectSection.transform, 10);
+        CreateActionButton(connectSection.transform, "Connect", "Initialise SDK before showing offerwall", ColorGreen, ConnectOfferwall);
         CreateSpacer(contentParent, 20);
 
         // Presentation section
@@ -144,54 +191,124 @@ public class OfferwallTestUI : MonoBehaviour
 
     // ── SDK Actions ──
 
+    private void ConnectOfferwall()
+    {
+        SyncInputFields();
+
+        XsollaOfferwall.Settings.OpenExternalLinksInBrowser = true;
+        XsollaOfferwall.Settings.Orientation               = OfferwallOrientation.Portrait;
+        XsollaOfferwall.Settings.LogLevel                  = OfferwallLogLevel.Verbose;
+
+        Log("Connecting...");
+        if (_connectStatusLabel != null) _connectStatusLabel.text = "Connecting...";
+        _statusLabel.text = "Connecting...";
+        XsollaOfferwall.Connect(error =>
+        {
+            if (error != null)
+            {
+                Log($"Connect ERROR: {error.Message}");
+                if (_connectStatusLabel != null) _connectStatusLabel.text = $"Error: {error.Message}";
+                _statusLabel.text = "Connect failed";
+            }
+            else
+            {
+                Log("Connected successfully");
+                if (_connectStatusLabel != null) _connectStatusLabel.text = "Connected";
+                _statusLabel.text = "Connected";
+            }
+        });
+    }
+
     private void ShowBasicOfferwall()
     {
         SyncInputFields();
-        var settings = new OfferwallSettings(placementId, userId);
         Log("Showing basic offerwall...");
         _statusLabel.text = "Opening...";
-        XsollaOfferwall.Show(settings, OnDismissed);
+        XsollaOfferwall.Show(placementId, onDismissed: OnDismissed);
     }
 
     private void ShowWithPrivacyPolicy()
     {
         SyncInputFields();
-        var settings = new OfferwallSettings(placementId, userId)
-        {
-            PrivacyPolicy = new OfferwallPrivacyPolicy
-            {
-                SubjectToGDPR = subjectToGDPR,
-                UserConsent = userConsent,
-                BelowConsentAge = belowConsentAge,
-                UsPrivacy = usPrivacy
-            }
-        };
+        XsollaOfferwall.PrivacyPolicy.SubjectToGDPR   = subjectToGDPR;
+        XsollaOfferwall.PrivacyPolicy.UserConsent     = userConsent;
+        XsollaOfferwall.PrivacyPolicy.BelowConsentAge = belowConsentAge;
+        XsollaOfferwall.PrivacyPolicy.UsPrivacy       = usPrivacy;
         Log("Showing with privacy policy...");
         _statusLabel.text = "Opening (privacy)...";
-        XsollaOfferwall.Show(settings, OnDismissed);
+        XsollaOfferwall.Show(placementId, onDismissed: OnDismissed);
     }
 
     private void ShowWithCustomParams()
     {
         SyncInputFields();
-        var settings = new OfferwallSettings(placementId, userId)
-        {
-            CustomParameters = new Dictionary<string, string>
+        Log("Showing with custom params...");
+        _statusLabel.text = "Opening (custom)...";
+        XsollaOfferwall.Show(placementId,
+            customParams: new Dictionary<string, string>
             {
                 { customParamKey, customParamValue },
                 { "source", "unity_test_app" }
-            }
-        };
-        Log("Showing with custom params...");
-        _statusLabel.text = "Opening (custom)...";
-        XsollaOfferwall.Show(settings, OnDismissed);
+            },
+            onDismissed: OnDismissed);
     }
+
+#if UNITY_IOS && IOS_SUPPORT_AVAILABLE
+    private void RequestAttAuthorization()
+    {
+        Log("Requesting ATT authorization...");
+        if (_attStatusLabel != null) _attStatusLabel.text = "Status: Requesting...";
+        StartCoroutine(RequestAttCoroutine());
+    }
+
+    private IEnumerator RequestAttCoroutine()
+    {
+        ATTrackingStatusBinding.RequestAuthorizationTracking();
+
+        // Poll until the user responds (status leaves NOT_DETERMINED).
+        while (ATTrackingStatusBinding.GetAuthorizationTrackingStatus() ==
+               ATTrackingStatusBinding.AuthorizationTrackingStatus.NOT_DETERMINED)
+        {
+            yield return null;
+        }
+
+        var status = ATTrackingStatusBinding.GetAuthorizationTrackingStatus();
+        Log($"ATT status: {status}");
+        if (_attStatusLabel != null) _attStatusLabel.text = $"Status: {status}";
+    }
+#endif
 
     private void DismissOfferwall()
     {
         XsollaOfferwall.Dismiss();
         Log("Dismiss called");
         _statusLabel.text = "Dismissed";
+    }
+
+    private void EnableAndroidDeviceId()
+    {
+        XsollaOfferwall.SetAndroidDeviceIdEnabled(true);
+        RefreshAndroidDeviceIdLabel();
+        Log($"Android Device ID enabled (IsAndroidDeviceIdEnabled={XsollaOfferwall.IsAndroidDeviceIdEnabled()})");
+    }
+
+    private void DisableAndroidDeviceId()
+    {
+        XsollaOfferwall.SetAndroidDeviceIdEnabled(false);
+        RefreshAndroidDeviceIdLabel();
+        Log($"Android Device ID disabled (IsAndroidDeviceIdEnabled={XsollaOfferwall.IsAndroidDeviceIdEnabled()})");
+    }
+
+    private void RefreshAndroidDeviceIdLabel()
+    {
+        if (_androidDeviceIdLabel != null)
+            _androidDeviceIdLabel.text = GetAndroidDeviceIdStateText();
+    }
+
+    private static string GetAndroidDeviceIdStateText()
+    {
+        bool enabled = XsollaOfferwall.IsAndroidDeviceIdEnabled();
+        return $"Android Device ID: {(enabled ? "Enabled" : "Disabled")} (Android only)";
     }
 
     private void OnDismissed(string error)
@@ -502,6 +619,29 @@ public class OfferwallTestUI : MonoBehaviour
         le.preferredHeight = 70;
 
         button.onClick.AddListener(onClick);
+    }
+
+    private static void CreateHorizontalButtonPair(
+        Transform parent,
+        string label1, Color color1, UnityEngine.Events.UnityAction onClick1,
+        string label2, Color color2, UnityEngine.Events.UnityAction onClick2)
+    {
+        var rowGo = new GameObject("ButtonRow", typeof(RectTransform), typeof(HorizontalLayoutGroup), typeof(LayoutElement));
+        rowGo.transform.SetParent(parent, false);
+
+        var hlg = rowGo.GetComponent<HorizontalLayoutGroup>();
+        hlg.childControlWidth = true;
+        hlg.childControlHeight = true;
+        hlg.childForceExpandWidth = true;
+        hlg.childForceExpandHeight = false;
+        hlg.spacing = 12;
+
+        var le = rowGo.GetComponent<LayoutElement>();
+        le.minHeight = 70;
+        le.preferredHeight = 70;
+
+        CreateSimpleButton(rowGo.transform, label1, color1, onClick1);
+        CreateSimpleButton(rowGo.transform, label2, color2, onClick2);
     }
 
     private static GameObject CreateLogArea(Transform parent)

@@ -1,5 +1,4 @@
 #if UNITY_IOS
-using System.IO;
 using UnityEditor;
 using UnityEditor.Callbacks;
 using UnityEditor.iOS.Xcode;
@@ -8,8 +7,8 @@ using UnityEngine;
 namespace Xsolla.Offerwall.Editor
 {
     /// <summary>
-    /// Post-process build script that ensures XsollaOfferwallSDK and XsollaMobileSDK
-    /// Swift Package products are linked in the Unity-iPhone target's
+    /// Post-process build script that ensures XsollaOfferwallSDK
+    /// Swift Package product is linked in the Unity-iPhone target's
     /// "Link Binary with Libraries" phase of the generated Xcode project.
     ///
     /// EDM4U (External Dependency Manager for Unity) adds the remote Swift Package
@@ -18,20 +17,15 @@ namespace Xsolla.Offerwall.Editor
     /// </summary>
     public static class XsollaIosBuildPostProcessor
     {
-        // Swift Package repository URLs — must match XsollaDependencies.xml exactly.
+        // Swift Package repository URL — must match XsollaDependencies.xml exactly.
         private const string OfferwallPackageUrl =
             "https://github.com/xsolla/xsolla-offerwall-ios-swift-package.git";
 
-        private const string MobilePackageUrl =
-            "https://github.com/xsolla/xsolla-sdk-ios.git";
-
-        // Package versions — must match XsollaDependencies.xml exactly.
-        private const string OfferwallPackageVersion = "0.1.1";
-        private const string MobilePackageVersion    = "3.9.2";
+        // Package version — must match XsollaDependencies.xml exactly.
+        private const string OfferwallPackageVersion = "0.2.0";
 
         // The Swift Package product names to link.
         private static readonly string[] OfferwallProducts = { "XsollaOfferwallSDK" };
-        private static readonly string[] MobileProducts    = { "XsollaMobileSDK" };
 
         // Run after EDM4U's own post-process step (callbackOrder > 0 is sufficient).
         [PostProcessBuild(100)]
@@ -60,15 +54,6 @@ namespace Xsolla.Offerwall.Editor
                 OfferwallPackageUrl,
                 OfferwallPackageVersion,
                 OfferwallProducts
-            );
-
-            // Link XsollaMobileSDK -----------------------------------------------------
-            LinkSwiftPackageProducts(
-                project,
-                mainTargetGuid,
-                MobilePackageUrl,
-                MobilePackageVersion,
-                MobileProducts
             );
 
             project.WriteToFile(pbxProjectPath);

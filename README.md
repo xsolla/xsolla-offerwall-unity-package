@@ -5,11 +5,11 @@ Monetize your Unity players by displaying an offerwall where they earn virtual r
 For more info see https://xsolla.com/xsolla-ads 
 ## System Requirements
 
-| Requirement | Minimum |
-|-------------|---------|
-| Unity | 2021.3 LTS |
-| Android | SDK 24+ (Android 7.0) |
-| iOS | 12.0+ |
+| Requirement | Minimum               |
+|-------------|-----------------------|
+| Unity | 2021.3 LTS            |
+| Android | SDK 23+ (Android 6.0) |
+| iOS | 12.0+                 |
 
 ## Installation
 

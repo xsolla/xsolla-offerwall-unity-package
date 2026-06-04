@@ -15,20 +15,60 @@ namespace Xsolla.Offerwall
         private const string Tag = "XsollaOfferwall.iOS";
 
         private static Action<string> _pendingCallback;
+        private static Action<XOError> _pendingConnectCallback;
+
+        [DllImport("__Internal")]
+        private static extern void _XsollaOfferwall_Connect(ConnectCallbackDelegate callback);
 
         [DllImport("__Internal")]
         private static extern void _XsollaOfferwall_Show(
             string placementId,
-            string userId,
             string customParamsJson,
-            string privacyPolicyJson,
             DismissCallbackDelegate callback
         );
 
         [DllImport("__Internal")]
+        private static extern void _XsollaOfferwall_SetPrivacyPolicy(
+            int subjectToGDPR,
+            string userConsent,
+            int belowConsentAge,
+            string usPrivacy
+        );
+
+        [DllImport("__Internal")]
+        private static extern void _XsollaOfferwall_GetSettings(out int orientation, out int logLevel);
+
+        [DllImport("__Internal")]
+        private static extern void _XsollaOfferwall_SetSettings(int orientation, int logLevel);
+
+        [DllImport("__Internal")]
+        private static extern IntPtr _XsollaOfferwall_GetUserId();
+
+        [DllImport("__Internal")]
+        private static extern void _XsollaOfferwall_GetPrivacyPolicy(
+            out int subjectToGDPR,
+            out IntPtr userConsent,
+            out int belowConsentAge,
+            out IntPtr usPrivacy
+        );
+
+        [DllImport("__Internal")]
+        private static extern void _XsollaOfferwall_SetUserId(string userId);
+
+        [DllImport("__Internal")]
         private static extern void _XsollaOfferwall_Dismiss();
 
+        private delegate void ConnectCallbackDelegate(string error);
         private delegate void DismissCallbackDelegate(string error);
+
+        [MonoPInvokeCallback(typeof(ConnectCallbackDelegate))]
+        private static void OnConnected(string error)
+        {
+            var callback = _pendingConnectCallback;
+            _pendingConnectCallback = null;
+            XOError xoError = error != null ? new XOError(error) : null;
+            MainThreadDispatcher.Enqueue(() => callback?.Invoke(xoError));
+        }
 
         [MonoPInvokeCallback(typeof(DismissCallbackDelegate))]
         private static void OnDismissed(string error)
@@ -38,34 +78,122 @@ namespace Xsolla.Offerwall
             MainThreadDispatcher.Enqueue(() => callback?.Invoke(error));
         }
 
-        public void Show(OfferwallSettings settings, Action<string> onDismissed)
+        public OfferwallSettings GetSettings()
+        {
+            _XsollaOfferwall_GetSettings(out int orientation, out int logLevel);
+
+            return new OfferwallSettings
+            {
+                Orientation = orientation switch
+                {
+                    1 => OfferwallOrientation.Landscape,
+                    2 => OfferwallOrientation.Unspecified,
+                    _ => OfferwallOrientation.Portrait,
+                },
+                LogLevel = logLevel switch
+                {
+                    0 => OfferwallLogLevel.Verbose,
+                    2 => OfferwallLogLevel.Debug,
+                    3 => OfferwallLogLevel.Info,
+                    5 => OfferwallLogLevel.Warning,
+                    6 => OfferwallLogLevel.Error,
+                    _ => null,
+                },
+                // openExternalLinksInBrowser not readable from iOS — return cached value
+                OpenExternalLinksInBrowser = true,
+            };
+        }
+
+        public void SetSettings(OfferwallSettings settings)
+        {
+            int orientation = settings.Orientation switch
+            {
+                OfferwallOrientation.Landscape   => 1,
+                OfferwallOrientation.Unspecified => 2,
+                _                                => 0,
+            };
+
+            // Map to XMOLogLevel raw values: verbose=0, debug=2, info=3, warning=5, error=6
+            int logLevel = settings.LogLevel.HasValue ? settings.LogLevel.Value switch
+            {
+                OfferwallLogLevel.Verbose => 0,
+                OfferwallLogLevel.Debug   => 2,
+                OfferwallLogLevel.Info    => 3,
+                OfferwallLogLevel.Warning => 5,
+                OfferwallLogLevel.Error   => 6,
+                _                         => -1,
+            } : -1;
+
+            _XsollaOfferwall_SetSettings(orientation, logLevel);
+        }
+
+        public void Connect(Action<XOError> onComplete)
+        {
+            _pendingConnectCallback = onComplete;
+            _XsollaOfferwall_Connect(OnConnected);
+        }
+
+        public void Show(string placementId, Dictionary<string, string> customParams, Action<string> onDismissed)
         {
             _pendingCallback = onDismissed;
 
             string customParamsJson = null;
-            if (settings.CustomParameters != null && settings.CustomParameters.Count > 0)
-            {
-                customParamsJson = DictToJson(settings.CustomParameters);
-            }
+            if (customParams != null && customParams.Count > 0)
+                customParamsJson = DictToJson(customParams);
 
-            string privacyJson = null;
-            if (settings.PrivacyPolicy != null)
-            {
-                privacyJson = PrivacyPolicyToJson(settings.PrivacyPolicy);
-            }
+            _XsollaOfferwall_Show(placementId, customParamsJson, OnDismissed);
+        }
 
-            _XsollaOfferwall_Show(
-                settings.PlacementId,
-                settings.UserId,
-                customParamsJson,
-                privacyJson,
-                OnDismissed
+        public void SetUserId(string userId)
+        {
+            _XsollaOfferwall_SetUserId(userId);
+        }
+
+        public string GetUserId()
+        {
+            var ptr = _XsollaOfferwall_GetUserId();
+            return ptr != IntPtr.Zero ? Marshal.PtrToStringUTF8(ptr) : null;
+        }
+
+        public OfferwallPrivacyPolicy GetPrivacyPolicy()
+        {
+            _XsollaOfferwall_GetPrivacyPolicy(
+                out int gdprInt, out IntPtr userConsentPtr,
+                out int belowAgeInt, out IntPtr usPrivacyPtr);
+
+            return new OfferwallPrivacyPolicy
+            {
+                SubjectToGDPR   = gdprInt     >= 0 ? gdprInt     == 1 : (bool?)null,
+                BelowConsentAge = belowAgeInt >= 0 ? belowAgeInt == 1 : (bool?)null,
+                UserConsent     = userConsentPtr != IntPtr.Zero ? Marshal.PtrToStringUTF8(userConsentPtr) : null,
+                UsPrivacy       = usPrivacyPtr   != IntPtr.Zero ? Marshal.PtrToStringUTF8(usPrivacyPtr)   : null,
+            };
+        }
+
+        public void SetPrivacyPolicy(OfferwallPrivacyPolicy pp)
+        {
+            _XsollaOfferwall_SetPrivacyPolicy(
+                pp.SubjectToGDPR.HasValue  ? (pp.SubjectToGDPR.Value  ? 1 : 0) : -1,
+                pp.UserConsent,
+                pp.BelowConsentAge.HasValue ? (pp.BelowConsentAge.Value ? 1 : 0) : -1,
+                pp.UsPrivacy
             );
         }
 
         public void Dismiss()
         {
             _XsollaOfferwall_Dismiss();
+        }
+
+        public void SetAndroidDeviceIdEnabled(bool enabled)
+        {
+            // Android-only feature — no-op on iOS.
+        }
+
+        public bool IsAndroidDeviceIdEnabled()
+        {
+            // Android-only feature — always returns false on iOS.
+            return false;
         }
 
         private static string DictToJson(Dictionary<string, string> dict)
@@ -76,20 +204,6 @@ namespace Xsolla.Offerwall
             {
                 parts.Add($"\"{EscapeJson(kvp.Key)}\":\"{EscapeJson(kvp.Value)}\"");
             }
-            return "{" + string.Join(",", parts) + "}";
-        }
-
-        private static string PrivacyPolicyToJson(OfferwallPrivacyPolicy pp)
-        {
-            var parts = new List<string>();
-            if (pp.SubjectToGDPR.HasValue)
-                parts.Add($"\"subjectToGDPR\":{(pp.SubjectToGDPR.Value ? "true" : "false")}");
-            if (pp.UserConsent != null)
-                parts.Add($"\"userConsent\":\"{EscapeJson(pp.UserConsent)}\"");
-            if (pp.BelowConsentAge.HasValue)
-                parts.Add($"\"belowConsentAge\":{(pp.BelowConsentAge.Value ? "true" : "false")}");
-            if (pp.UsPrivacy != null)
-                parts.Add($"\"usPrivacy\":\"{EscapeJson(pp.UsPrivacy)}\"");
             return "{" + string.Join(",", parts) + "}";
         }
 
