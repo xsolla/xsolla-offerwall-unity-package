@@ -1,0 +1,25 @@
+{
+  "name": "Xsolla.Offerwall.Samples",
+  "rootNamespace": "Xsolla.Offerwall.Samples",
+  "references": [
+    "Xsolla.Offerwall",
+    "UnityEngine.UI",
+    "UnityEngine.EventSystemsModule",
+    "Unity.Advertisement.IosSupport"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [
+    {
+      "name": "com.unity.ads.ios-support",
+      "expression": "1.0.0",
+      "define": "IOS_SUPPORT_AVAILABLE"
+    }
+  ],
+  "noEngineReferences": false
+}

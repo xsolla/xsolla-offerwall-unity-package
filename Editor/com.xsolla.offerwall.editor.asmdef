@@ -1,11 +1,12 @@
 {
-  "name": "Xsolla.Offerwall",
-  "rootNamespace": "Xsolla.Offerwall",
+  "name": "Xsolla.Offerwall.Editor",
+  "rootNamespace": "Xsolla.Offerwall.Editor",
   "references": [
-    "UnityEngine.AndroidJNIModule",
-    "UnityEngine.JSONSerializeModule"
+    "Xsolla.Offerwall"
   ],
-  "includePlatforms": [],
+  "includePlatforms": [
+    "Editor"
+  ],
   "excludePlatforms": [],
   "allowUnsafeCode": false,
   "overrideReferences": false,

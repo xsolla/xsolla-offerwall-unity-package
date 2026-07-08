@@ -64,6 +64,13 @@ namespace Xsolla.Offerwall
                 get => Native.GetSettings().LogLevel;
                 set { _settings.LogLevel = value; Native.SetSettings(_settings); }
             }
+
+            /// <summary>
+            /// Pushes the cached C#-side settings back to the native SDK.
+            /// Called after a successful connect so any explicit settings (e.g. LogLevel)
+            /// survive SDK initialisation, which may replace the native settings object.
+            /// </summary>
+            internal static void Reapply() => Native.SetSettings(_settings);
         }
 
         /// <summary>
@@ -113,7 +120,17 @@ namespace Xsolla.Offerwall
         /// <param name="onComplete">Called when the connection attempt finishes. Null error means success.</param>
         public static void Connect(Action<XOError> onComplete = null)
         {
-            Native.Connect(onComplete);
+            Native.Connect(error =>
+            {
+                // Re-push cached settings after connect. The SDK may initialise a fresh
+                // settings object internally during connect, discarding any pre-connect
+                // mutations (e.g. an explicit LogLevel). Reapply ensures the C#-side
+                // values survive and are reflected when the UI reads them back.
+                if (error == null)
+                    Settings.Reapply();
+
+                onComplete?.Invoke(error);
+            });
         }
 
         /// <summary>
@@ -150,11 +167,53 @@ namespace Xsolla.Offerwall
         }
 
         /// <summary>
-        /// Dismisses the currently displayed offerwall, if any.
+        /// Sets the publisher user IDs sent as the X-Publisher-User-IDs header with every offerwall request.
+        /// Replaces any previously set publisher user IDs. Pass an empty list (or null) to clear.
+        /// Can be called before or after <see cref="Connect"/>. Persisted natively between sessions.
         /// </summary>
-        public static void Dismiss()
+        public static void SetPublisherUserIds(List<string> publisherUserIds)
         {
-            Native.Dismiss();
+            Native.SetPublisherUserIds(publisherUserIds ?? new List<string>());
+        }
+
+        /// <summary>
+        /// Convenience overload for setting a single publisher user ID.
+        /// Passing null or an empty string clears the list.
+        /// </summary>
+        public static void SetPublisherUserIds(string publisherUserId)
+        {
+            SetPublisherUserIds(string.IsNullOrEmpty(publisherUserId)
+                ? new List<string>()
+                : new List<string> { publisherUserId });
+        }
+
+        /// <summary>
+        /// Returns the publisher user IDs currently set on the SDK. Always non-null; empty if none are set.
+        /// </summary>
+        public static List<string> GetPublisherUserIds()
+        {
+            return Native.GetPublisherUserIds() ?? new List<string>();
+        }
+
+        /// <summary>
+        /// Returns the SDK version string.
+        /// If the Unity package version matches the native SDK version, returns the version directly.
+        /// If they differ, returns a combined string e.g. "Unity-0.3.0-alpha1,Android-0.2.0".
+        /// In the Editor the Unity version is always returned.
+        /// </summary>
+        public static string GetVersion()
+        {
+            var nativeVersion = Native.GetNativeVersion();
+            if (nativeVersion == XsollaOfferwallVersion.UnityVersion)
+                return nativeVersion;
+
+#if UNITY_ANDROID && !UNITY_EDITOR
+            return $"Unity-{XsollaOfferwallVersion.UnityVersion},Android-{nativeVersion}";
+#elif UNITY_IOS && !UNITY_EDITOR
+            return $"Unity-{XsollaOfferwallVersion.UnityVersion},iOS-{nativeVersion}";
+#else
+            return XsollaOfferwallVersion.UnityVersion;
+#endif
         }
 
         /// <summary>

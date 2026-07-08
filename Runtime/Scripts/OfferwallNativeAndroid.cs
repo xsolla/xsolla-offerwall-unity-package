@@ -37,10 +37,13 @@ namespace Xsolla.Offerwall
                 using var orientation = orientationClass.GetStatic<AndroidJavaObject>(orientationName);
                 xoSettings.Call("setOrientation", orientation);
 
-                // LogLevel — null means leave at platform default
+                // LogLevel — always call setLogLevel so the SDK Logger reflects the intent:
+                // a non-null value sets the explicit level; null resets Logger to its internal
+                // default (ERROR), undoing any level set earlier in the same session.
+                using var logLevelClass = new AndroidJavaClass("com.xsolla.offerwallsdk.util.LogLevel");
+                AndroidJavaObject logLevel = null;
                 if (settings.LogLevel.HasValue)
                 {
-                    using var logLevelClass = new AndroidJavaClass("com.xsolla.offerwallsdk.util.LogLevel");
                     var logLevelName = settings.LogLevel.Value switch
                     {
                         OfferwallLogLevel.Verbose => "VERBOSE",
@@ -50,9 +53,10 @@ namespace Xsolla.Offerwall
                         OfferwallLogLevel.Error   => "ERROR",
                         _                         => "INFO",
                     };
-                    using var logLevel = logLevelClass.GetStatic<AndroidJavaObject>(logLevelName);
-                    xoSettings.Call("setLogLevel", logLevel);
+                    logLevel = logLevelClass.GetStatic<AndroidJavaObject>(logLevelName);
                 }
+                xoSettings.Call("setLogLevel", logLevel);
+                logLevel?.Dispose();
             }
             catch (Exception e)
             {
@@ -105,9 +109,11 @@ namespace Xsolla.Offerwall
         {
             try
             {
+                using var activity = GetCurrentActivity();
+                using var context = activity.Call<AndroidJavaObject>("getApplicationContext");
                 using var sdkClass = new AndroidJavaClass(SdkClass);
                 using var sdk = sdkClass.GetStatic<AndroidJavaObject>("INSTANCE");
-                sdk.Call("connect", new ConnectCallback(onComplete));
+                sdk.Call("connect", context, new ConnectCallback(onComplete));
             }
             catch (Exception e)
             {
@@ -186,6 +192,49 @@ namespace Xsolla.Offerwall
             }
         }
 
+        public void SetPublisherUserIds(List<string> publisherUserIds)
+        {
+            try
+            {
+                using var sdkClass = new AndroidJavaClass(SdkClass);
+                using var sdk = sdkClass.GetStatic<AndroidJavaObject>("INSTANCE");
+                using var list = new AndroidJavaObject("java.util.ArrayList");
+                if (publisherUserIds != null)
+                {
+                    // Kotlin's setPublisherUserIds(List<String>) calls isNotBlank() on each
+                    // entry; a smuggled-in null (JNI bypasses Kotlin's null-safety) would NPE.
+                    foreach (var id in publisherUserIds)
+                        if (id != null)
+                            list.Call<bool>("add", id);
+                }
+                sdk.Call("setPublisherUserIds", list);
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[{Tag}] SetPublisherUserIds failed: {e}");
+            }
+        }
+
+        public List<string> GetPublisherUserIds()
+        {
+            try
+            {
+                using var sdkClass = new AndroidJavaClass(SdkClass);
+                using var sdk = sdkClass.GetStatic<AndroidJavaObject>("INSTANCE");
+                using var list = sdk.Call<AndroidJavaObject>("getPublisherUserIds");
+                int count = list.Call<int>("size");
+                var result = new List<string>(count);
+                for (int i = 0; i < count; i++)
+                    result.Add(list.Call<string>("get", i));
+                return result;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[{Tag}] GetPublisherUserIds failed: {e}");
+                return new List<string>();
+            }
+        }
+
         public OfferwallPrivacyPolicy GetPrivacyPolicy()
         {
             try
@@ -211,11 +260,19 @@ namespace Xsolla.Offerwall
             }
         }
 
-        public void Dismiss()
+        public string GetNativeVersion()
         {
-            // XsollaOfferwallSdk does not expose a programmatic dismiss/shutdown method.
-            // The offerwall is dismissed when the user closes it, which triggers onClosed().
-            Debug.LogWarning($"[{Tag}] Programmatic dismissal is not supported via XsollaOfferwallSdk.");
+            try
+            {
+                using var sdkClass = new AndroidJavaClass(SdkClass);
+                using var sdk = sdkClass.GetStatic<AndroidJavaObject>("INSTANCE");
+                return sdk.Call<string>("getVersion");
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[{Tag}] GetNativeVersion failed: {e}");
+                return "unknown";
+            }
         }
 
         public void SetAndroidDeviceIdEnabled(bool enabled)

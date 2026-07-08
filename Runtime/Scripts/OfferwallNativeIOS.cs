@@ -56,7 +56,13 @@ namespace Xsolla.Offerwall
         private static extern void _XsollaOfferwall_SetUserId(string userId);
 
         [DllImport("__Internal")]
-        private static extern void _XsollaOfferwall_Dismiss();
+        private static extern void _XsollaOfferwall_SetPublisherUserIds(string idsJson);
+
+        [DllImport("__Internal")]
+        private static extern IntPtr _XsollaOfferwall_GetPublisherUserIds();
+
+        [DllImport("__Internal")]
+        private static extern IntPtr _XsollaOfferwall_GetVersion();
 
         private delegate void ConnectCallbackDelegate(string error);
         private delegate void DismissCallbackDelegate(string error);
@@ -155,6 +161,32 @@ namespace Xsolla.Offerwall
             return ptr != IntPtr.Zero ? Marshal.PtrToStringUTF8(ptr) : null;
         }
 
+        // Wraps a bare string array so it round-trips through JsonUtility, which cannot
+        // (de)serialize a top-level JSON array on its own.
+        [Serializable]
+        private class StringListWrapper
+        {
+            public string[] ids;
+        }
+
+        public void SetPublisherUserIds(List<string> publisherUserIds)
+        {
+            var wrapper = new StringListWrapper { ids = publisherUserIds?.ToArray() ?? Array.Empty<string>() };
+            _XsollaOfferwall_SetPublisherUserIds(JsonUtility.ToJson(wrapper));
+        }
+
+        public List<string> GetPublisherUserIds()
+        {
+            var ptr = _XsollaOfferwall_GetPublisherUserIds();
+            if (ptr == IntPtr.Zero) return new List<string>();
+
+            var json = Marshal.PtrToStringUTF8(ptr);
+            if (string.IsNullOrEmpty(json)) return new List<string>();
+
+            var wrapper = JsonUtility.FromJson<StringListWrapper>(json);
+            return wrapper?.ids != null ? new List<string>(wrapper.ids) : new List<string>();
+        }
+
         public OfferwallPrivacyPolicy GetPrivacyPolicy()
         {
             _XsollaOfferwall_GetPrivacyPolicy(
@@ -180,9 +212,10 @@ namespace Xsolla.Offerwall
             );
         }
 
-        public void Dismiss()
+        public string GetNativeVersion()
         {
-            _XsollaOfferwall_Dismiss();
+            var ptr = _XsollaOfferwall_GetVersion();
+            return ptr != IntPtr.Zero ? Marshal.PtrToStringUTF8(ptr) : "unknown";
         }
 
         public void SetAndroidDeviceIdEnabled(bool enabled)

@@ -4,6 +4,38 @@ All notable changes to the Xsolla Offerwall SDK for Unity will be documented in 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-07-08
+
+### Added
+
+- Settings editor window (Window > Xsolla Offerwall > Settings). Creates `Assets/XsollaOfferwallSDK/Resources/XsollaOfferwallRuntimeSettings.asset`
+  - Display the SDK version
+  - Runtime default settings. Values are applied automatically before the first scene loads via `XsollaOfferwallRuntimeInit`, with lower priority than any explicit calls made later in game code.
+    - Android Device ID toggle 
+    - Screen orientation selector
+    - Log level selector. 
+  - App Set ID toggle; when enabled, adds `com.google.android.gms:play-services-appset` to `XsollaDependencies.xml` with a configurable version (default `16.1.0`); preference persists across editor sessions; enabled by default
+  - iOS integration selector in the Settings window: Swift Package Manager (default) or CocoaPods
+- `XsollaOfferwall.SetPublisherUserIds()` / `GetPublisherUserIds()` — sets the publisher user IDs
+- [SAMPLE APP] Publisher User IDs list UI in Settings screen — view, add, and remove publisher user IDs
+- [SAMPLE APP] Settings screen: expanded PrivacyPolicy config, moved UserID
+- [SAMPLE APP] Log Level App UI in Settings, stored in `PlayerPrefs`
+- [SAMPLE APP] Orientation selector (Portrait / Landscape / Unspecified) to Settings screen
+- [SAMPLE APP] Example script to increase CocoaPods minimum deployment targets.
+
+### Changed
+
+- Xsolla Offerwall Android SDK 0.3.0
+- Xsolla Offerwall iOS SDK 0.3.0
+
+### Fixed
+
+- Declared `com.unity.modules.androidjni` and `com.unity.modules.jsonserialize` as package dependencies so the SDK compiles in projects that have removed these built-in Unity modules.
+
+### Removed
+
+- `XsollaOfferwall.Dismiss()` — programmatic dismissal was not supported by the underlying native SDKs.
+
 ## [0.2.0] - 2026-06-04
 
 ### Added

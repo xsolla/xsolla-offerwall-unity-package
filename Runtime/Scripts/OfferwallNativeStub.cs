@@ -38,6 +38,13 @@ namespace Xsolla.Offerwall
 
         public string GetUserId() => null;
 
+        public void SetPublisherUserIds(List<string> publisherUserIds)
+        {
+            // No-op in the Editor and on unsupported platforms.
+        }
+
+        public List<string> GetPublisherUserIds() => new List<string>();
+
         public void SetPrivacyPolicy(OfferwallPrivacyPolicy privacyPolicy)
         {
             // No-op in the Editor and on unsupported platforms.
@@ -45,10 +52,7 @@ namespace Xsolla.Offerwall
 
         public OfferwallPrivacyPolicy GetPrivacyPolicy() => new OfferwallPrivacyPolicy();
 
-        public void Dismiss()
-        {
-            Debug.LogWarning("[XsollaOfferwall] Dismiss is only supported on iOS and Android.");
-        }
+        public string GetNativeVersion() => XsollaOfferwallVersion.UnityVersion;
 
         public void SetAndroidDeviceIdEnabled(bool enabled)
         {
