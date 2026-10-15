@@ -40,13 +40,18 @@ namespace Xsolla.Offerwall
             private static readonly OfferwallSettings _settings = new OfferwallSettings();
 
             /// <summary>
-            /// Whether external links open in the device browser. Defaults to true.
-            /// Android only — ignored on iOS.
+            /// Whether external links open in the device browser.
             /// </summary>
+            /// <remarks>
+            /// Deprecated and ignored. External links always open in the device browser:
+            /// The getter always returns <c>true</c>,
+            /// the setter is a no-op, and this property will be removed in v1.0.0.
+            /// </remarks>
+            [Obsolete("OpenExternalLinksInBrowser is deprecated and ignored. External links always open in the device browser. This property will be removed in v1.0.0.")]
             public static bool OpenExternalLinksInBrowser
             {
-                get => Native.GetSettings().OpenExternalLinksInBrowser;
-                set { _settings.OpenExternalLinksInBrowser = value; Native.SetSettings(_settings); }
+                get => true;
+                set { /* no-op: external links always open in the device browser */ }
             }
 
             /// <summary>Screen orientation for the offerwall. Defaults to Portrait.</summary>
@@ -78,6 +83,10 @@ namespace Xsolla.Offerwall
         /// Set individual properties to push each value to the native SDK immediately:
         /// <code>XsollaOfferwall.PrivacyPolicy.SubjectToGDPR = true;</code>
         /// Maps to <c>XOPrivacyPolicy</c> on Android and <c>OfferwallManager.shared.privacyPolicy</c> on iOS.
+        /// For <see cref="SubjectToGDPR"/>, <see cref="UserConsent"/>, <see cref="UsPrivacy"/>,
+        /// <see cref="GppString"/>, and <see cref="GppSid"/>, every read reflects whatever is
+        /// currently in the platform's shared IAB storage (e.g. written by a CMP/UMP consent flow)
+        /// with no separate refresh step required — the native SDKs source these fields live.
         /// </summary>
         public static class PrivacyPolicy
         {
@@ -110,12 +119,26 @@ namespace Xsolla.Offerwall
                 get => Native.GetPrivacyPolicy().UsPrivacy;
                 set { _policy.UsPrivacy = value; Native.SetPrivacyPolicy(_policy); }
             }
+
+            /// <summary>IAB Global Privacy Platform (GPP) consent string.</summary>
+            public static string GppString
+            {
+                get => Native.GetPrivacyPolicy().GppString;
+                set { _policy.GppString = value; Native.SetPrivacyPolicy(_policy); }
+            }
+
+            /// <summary>IAB GPP Section ID(s) that apply (e.g. "7_8").</summary>
+            public static string GppSid
+            {
+                get => Native.GetPrivacyPolicy().GppSid;
+                set { _policy.GppSid = value; Native.SetPrivacyPolicy(_policy); }
+            }
         }
 
         /// <summary>
         /// Connects the SDK, making it ready to show offerwalls.
         /// Call <see cref="SetUserId"/> before connecting.
-        /// Must complete successfully before calling <see cref="Show"/>.
+        /// Must complete successfully before calling <see cref="Show(string, Dictionary{string, string}, Action, Action{XOError}, Action)"/>.
         /// </summary>
         /// <param name="onComplete">Called when the connection attempt finishes. Null error means success.</param>
         public static void Connect(Action<XOError> onComplete = null)
@@ -137,17 +160,43 @@ namespace Xsolla.Offerwall
         /// Shows the offerwall for the given placement.
         /// </summary>
         /// <param name="placementId">The placement ID from Publisher Account.</param>
-        /// <param name="customParams">Optional additional query parameters appended to the offerwall URL.</param>
+        /// <param name="customParams">Additional query parameters appended to the offerwall URL. May be null.</param>
         /// <param name="onDismissed">Called when the offerwall is dismissed. Null error means success.</param>
+        [Obsolete("Use Show(string, Dictionary<string, string>, Action, Action<XOError>, Action) instead, " +
+                  "which reports onOpened/onError/onClosed to match the iOS and Android SDKs. " +
+                  "This overload will be removed in v1.0.0.")]
+        public static void Show(
+            string placementId,
+            Dictionary<string, string> customParams,
+            Action<string> onDismissed)
+        {
+            Native.Show(
+                placementId,
+                customParams,
+                onOpened: null,
+                onError: error => onDismissed?.Invoke(error.Message),
+                onClosed: () => onDismissed?.Invoke(null));
+        }
+
+        /// <summary>
+        /// Shows the offerwall for the given placement.
+        /// </summary>
+        /// <param name="placementId">The placement ID from Publisher Account.</param>
+        /// <param name="customParams">Optional additional query parameters appended to the offerwall URL.</param>
+        /// <param name="onOpened">Called once the offerwall has been presented on screen.</param>
+        /// <param name="onError">
+        /// Called if the offerwall could not be shown. When this fires, neither
+        /// <paramref name="onOpened"/> nor <paramref name="onClosed"/> will fire for this call.
+        /// </param>
+        /// <param name="onClosed">Called when the offerwall has been dismissed, after having been successfully opened.</param>
         public static void Show(
             string placementId,
             Dictionary<string, string> customParams = null,
-            Action<string> onDismissed = null)
+            Action onOpened = null,
+            Action<XOError> onError = null,
+            Action onClosed = null)
         {
-            if (string.IsNullOrEmpty(placementId))
-                throw new ArgumentException("placementId is required", nameof(placementId));
-
-            Native.Show(placementId, customParams, onDismissed);
+            Native.Show(placementId, customParams, onOpened, onError, onClosed);
         }
 
         /// <summary>
@@ -228,7 +277,7 @@ namespace Xsolla.Offerwall
 
         /// <summary>
         /// Returns whether the Android Device ID is currently enabled for offerwall requests.
-        /// Defaults to true on Android when the setting has never been explicitly changed.
+        /// Defaults to false on Android when the setting has never been explicitly changed.
         /// Always returns false on iOS and in the Editor.
         /// </summary>
         public static bool IsAndroidDeviceIdEnabled()

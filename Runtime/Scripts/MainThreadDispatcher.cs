@@ -8,8 +8,11 @@ namespace Xsolla.Offerwall
     /// Dispatches actions to Unity's main thread.
     /// Native callbacks arrive on background threads — this ensures
     /// C# callbacks execute on the main thread where Unity API calls are safe.
+    /// Public so consumers can marshal their own native/background callbacks (e.g. Google
+    /// Mobile Ads UMP consent callbacks, which fire on Android's JNI thread) the same way the
+    /// SDK's own native bridges do — see OfferwallNativeAndroid.cs / OfferwallNativeIOS.cs.
     /// </summary>
-    internal class MainThreadDispatcher : MonoBehaviour
+    public class MainThreadDispatcher : MonoBehaviour
     {
         private static MainThreadDispatcher _instance;
         private static readonly Queue<Action> _queue = new Queue<Action>();

@@ -11,7 +11,23 @@ namespace Xsolla.Offerwall
         void SetSettings(OfferwallSettings settings);
         OfferwallSettings GetSettings();
         void Connect(Action<XOError> onComplete);
-        void Show(string placementId, Dictionary<string, string> customParams, Action<string> onDismissed);
+
+        /// <summary>
+        /// Shows the offerwall for the given placement.
+        /// </summary>
+        /// <param name="onOpened">Called once the offerwall has been presented on screen.</param>
+        /// <param name="onError">
+        /// Called if the offerwall could not be shown. When this fires, neither
+        /// <paramref name="onOpened"/> nor <paramref name="onClosed"/> will fire for this call.
+        /// </param>
+        /// <param name="onClosed">Called when the offerwall has been dismissed, after having been successfully opened.</param>
+        void Show(
+            string placementId,
+            Dictionary<string, string> customParams,
+            Action onOpened,
+            Action<XOError> onError,
+            Action onClosed);
+
         void SetUserId(string userId);
         string GetUserId();
 

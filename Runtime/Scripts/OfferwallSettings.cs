@@ -11,8 +11,12 @@ namespace Xsolla.Offerwall
     {
         /// <summary>
         /// Whether external links open in the device browser.
-        /// Defaults to true. Android only — ignored on iOS.
         /// </summary>
+        /// <remarks>
+        /// Deprecated and ignored. External links always open in the device browser:
+        /// The value is no longer sent to the native SDKs and this field will be removed in v1.0.0.
+        /// </remarks>
+        [Obsolete("OpenExternalLinksInBrowser is deprecated and ignored. External links always open in the device browser. This field will be removed in v1.0.0.")]
         public bool OpenExternalLinksInBrowser = true;
 
         /// <summary>
@@ -62,5 +66,11 @@ namespace Xsolla.Offerwall
 
         /// <summary>IAB US Privacy String (e.g. "1YNN").</summary>
         public string UsPrivacy;
+
+        /// <summary>IAB Global Privacy Platform (GPP) consent string.</summary>
+        public string GppString;
+
+        /// <summary>IAB GPP Section ID(s) that apply (e.g. "7_8").</summary>
+        public string GppSid;
     }
 }

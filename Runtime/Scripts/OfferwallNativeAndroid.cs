@@ -24,8 +24,6 @@ namespace Xsolla.Offerwall
                 using var sdk = sdkClass.GetStatic<AndroidJavaObject>("INSTANCE");
                 using var xoSettings = sdk.Call<AndroidJavaObject>("getSettings");
 
-                xoSettings.Call("setOpenExternalLinksInBrowser", settings.OpenExternalLinksInBrowser);
-
                 // Orientation
                 using var orientationClass = new AndroidJavaClass("com.xsolla.offerwallsdk.XOSettings$Orientation");
                 var orientationName = settings.Orientation switch
@@ -72,10 +70,7 @@ namespace Xsolla.Offerwall
                 using var sdk = sdkClass.GetStatic<AndroidJavaObject>("INSTANCE");
                 using var xoSettings = sdk.Call<AndroidJavaObject>("getSettings");
 
-                var result = new OfferwallSettings
-                {
-                    OpenExternalLinksInBrowser = xoSettings.Call<bool>("getOpenExternalLinksInBrowser"),
-                };
+                var result = new OfferwallSettings();
 
                 using var orientation = xoSettings.Call<AndroidJavaObject>("getOrientation");
                 result.Orientation = orientation.Call<string>("name") switch
@@ -122,7 +117,12 @@ namespace Xsolla.Offerwall
             }
         }
 
-        public void Show(string placementId, Dictionary<string, string> customParams, Action<string> onDismissed)
+        public void Show(
+            string placementId,
+            Dictionary<string, string> customParams,
+            Action onOpened,
+            Action<XOError> onError,
+            Action onClosed)
         {
             try
             {
@@ -141,13 +141,13 @@ namespace Xsolla.Offerwall
                 using var sdkClass = new AndroidJavaClass(SdkClass);
                 using var sdk = sdkClass.GetStatic<AndroidJavaObject>("INSTANCE");
 
-                sdk.Call("show", activity, placementId, nativeMap, new OpenCallback(onDismissed));
+                sdk.Call("show", activity, placementId, nativeMap, new OpenCallback(onOpened, onError, onClosed));
                 nativeMap?.Dispose();
             }
             catch (Exception e)
             {
                 Debug.LogError($"[{Tag}] Show failed: {e}");
-                onDismissed?.Invoke(e.Message);
+                onError?.Invoke(new XOError(e.Message));
             }
         }
 
@@ -251,6 +251,8 @@ namespace Xsolla.Offerwall
                     BelowConsentAge = belowAge != null ? belowAge.Call<bool>("booleanValue") : (bool?)null,
                     UserConsent     = pp.Call<string>("getUserConsent"),
                     UsPrivacy       = pp.Call<string>("getUsPrivacy"),
+                    GppString       = pp.Call<string>("getGppString"),
+                    GppSid          = pp.Call<string>("getGppSid"),
                 };
             }
             catch (Exception e)
@@ -337,6 +339,8 @@ namespace Xsolla.Offerwall
             ppInstance.Call("setUserConsent", pp.UserConsent);
             ppInstance.Call("setBelowConsentAge", belowAge);
             ppInstance.Call("setUsPrivacy", pp.UsPrivacy);
+            ppInstance.Call("setGppString", pp.GppString);
+            ppInstance.Call("setGppSid", pp.GppSid);
 
             gdpr?.Dispose();
             belowAge?.Dispose();
@@ -376,18 +380,23 @@ namespace Xsolla.Offerwall
         /// </summary>
         private class OpenCallback : AndroidJavaProxy
         {
-            private readonly Action<string> _onDismissed;
+            private readonly Action _onOpened;
+            private readonly Action<XOError> _onError;
+            private readonly Action _onClosed;
 
-            public OpenCallback(Action<string> onDismissed)
+            public OpenCallback(Action onOpened, Action<XOError> onError, Action onClosed)
                 : base("com.xsolla.offerwallsdk.IOfferwallOpenCallback")
             {
-                _onDismissed = onDismissed;
+                _onOpened = onOpened;
+                _onError = onError;
+                _onClosed = onClosed;
             }
 
             // Called from Java: void onOpened()
             void onOpened()
             {
                 Debug.Log($"[{Tag}] Offerwall opened.");
+                MainThreadDispatcher.Enqueue(() => _onOpened?.Invoke());
             }
 
             // Called from Java: void onError(XOError error)
@@ -395,13 +404,13 @@ namespace Xsolla.Offerwall
             {
                 var message = error?.Call<string>("getMessage") ?? "Offerwall error";
                 Debug.LogError($"[{Tag}] Offerwall error: {message}");
-                MainThreadDispatcher.Enqueue(() => _onDismissed?.Invoke(message));
+                MainThreadDispatcher.Enqueue(() => _onError?.Invoke(new XOError(message)));
             }
 
             // Called from Java: void onClosed()
             void onClosed()
             {
-                MainThreadDispatcher.Enqueue(() => _onDismissed?.Invoke(null));
+                MainThreadDispatcher.Enqueue(() => _onClosed?.Invoke());
             }
         }
     }

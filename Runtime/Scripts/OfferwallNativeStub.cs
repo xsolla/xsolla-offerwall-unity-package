@@ -24,11 +24,17 @@ namespace Xsolla.Offerwall
             onComplete?.Invoke(null);
         }
 
-        public void Show(string placementId, Dictionary<string, string> customParams, Action<string> onDismissed)
+        public void Show(
+            string placementId,
+            Dictionary<string, string> customParams,
+            Action onOpened,
+            Action<XOError> onError,
+            Action onClosed)
         {
             Debug.LogWarning("[XsollaOfferwall] Offerwall is only supported on iOS and Android. " +
                              "This call is a no-op in the Editor and on other platforms.");
-            onDismissed?.Invoke(null);
+            onOpened?.Invoke();
+            onClosed?.Invoke();
         }
 
         public void SetUserId(string userId)

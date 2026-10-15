@@ -45,7 +45,7 @@ namespace Xsolla.Offerwall.Editor
         // Native iOS SDK version — independent of the Unity package version.
         // Bump this when a new iOS SDK release is picked up, without necessarily
         // bumping the Unity plugin version at the same time.
-        internal const string IOSDefaultVersion = "0.3.0";
+        internal const string IOSDefaultVersion = "0.4.0";
 
         internal const string SpmPackageUrl  = "https://github.com/xsolla/xsolla-offerwall-ios-swift-package.git";
         internal const string SpmProductName = "XsollaOfferwallSDK";
@@ -137,6 +137,24 @@ namespace Xsolla.Offerwall.Editor
         // ── XML sync ──────────────────────────────────────────────────────────────
 
         /// <summary>
+        /// Forces both <c>XsollaDependencies.xml</c> and <c>XsollaOfferwallRuntimeSettings.asset</c>
+        /// to be rewritten from the current settings, then returns. The regular sync
+        /// (<see cref="SyncDependenciesXml"/> / <see cref="SyncRuntimeSettings"/>) runs via an
+        /// <see cref="EditorApplication.delayCall"/> queued in the static constructor, which is
+        /// only guaranteed to be pumped once the Editor's normal update loop is running. In
+        /// headless <c>-batchmode -quit</c> CI runs (see Assets/Editor/BuildHelper.cs) that
+        /// queued call is not reliably flushed before <c>-executeMethod</c> invokes the build —
+        /// so a build script must call this explicitly before resolving dependencies or building
+        /// the player, rather than relying on the delayed sync.
+        /// </summary>
+        public static void EnsureSettingsSynced()
+        {
+            SyncDependenciesXml();
+            SyncRuntimeSettings();
+            AssetDatabase.Refresh();
+        }
+
+        /// <summary>
         /// Rewrites <c>XsollaDependencies.xml</c> to reflect the current settings.
         /// Skips the write when the file is already correct.
         /// </summary>
@@ -222,6 +240,7 @@ namespace Xsolla.Offerwall.Editor
                 bool alreadyCorrect  = existingPods != null
                     && existingPod   != null
                     && (string)existingPod.Attribute("version") == IOSVersion
+                    && (string)existingPods.Element("sources")?.Element("source") == CocoaPodsSourceUrl
                     && existingSpm == null;
 
                 if (alreadyCorrect) return false;

@@ -1,12 +1,12 @@
-﻿<dependencies>
+<dependencies>
   <androidPackages>
     <repositories>
       <repository>https://cdn.xsolla.net/offerwallsdk-bucket-prod</repository>
     </repositories>
-    <androidPackage spec="com.xsolla.android:offerwall:0.3.0" />
+    <androidPackage spec="com.xsolla.android:offerwall:0.4.0" />
     <androidPackage spec="com.google.android.gms:play-services-appset:16.1.0" />
   </androidPackages>
-  <remoteSwiftPackage url="https://github.com/xsolla/xsolla-offerwall-ios-swift-package.git" version="0.3.0">
+  <remoteSwiftPackage url="https://github.com/xsolla/xsolla-offerwall-ios-swift-package.git" version="0.4.0">
     <swiftPackage name="XsollaOfferwallSDK" />
   </remoteSwiftPackage>
 </dependencies>

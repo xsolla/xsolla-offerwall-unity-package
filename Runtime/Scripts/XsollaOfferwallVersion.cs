@@ -5,6 +5,6 @@ namespace Xsolla.Offerwall
     /// </summary>
     public static class XsollaOfferwallVersion
     {
-        public const string UnityVersion = "0.3.0";
+        public const string UnityVersion = "0.4.0";
     }
 }

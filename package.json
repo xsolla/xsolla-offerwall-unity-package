@@ -1,7 +1,7 @@
 {
   "name": "com.xsolla.offerwall",
   "displayName": "Xsolla Offerwall SDK",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "unity": "2021.3",
   "description": "Xsolla Offerwall SDK for Unity. Displays an offerwall where players earn virtual rewards by completing advertiser tasks. Bridges to native iOS and Android SDKs.",
   "keywords": ["xsolla", "offerwall", "monetization", "ads"],
@@ -12,7 +12,8 @@
   "license": "Apache-2.0",
   "dependencies": {
     "com.unity.modules.androidjni": "1.0.0",
-    "com.unity.modules.jsonserialize": "1.0.0"
+    "com.unity.modules.jsonserialize": "1.0.0",
+    "com.unity.nuget.newtonsoft-json": "3.2.2"
   },
   "samples": [
     {

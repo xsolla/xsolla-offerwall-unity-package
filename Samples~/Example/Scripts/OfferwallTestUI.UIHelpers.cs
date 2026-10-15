@@ -141,6 +141,46 @@ public partial class OfferwallTestUI
         return sectionGo;
     }
 
+    /// <summary>
+    /// Creates a smaller, visually distinct nested card inside a <see cref="CreateSection"/> body —
+    /// a tinted panel with its own header — for grouping a handful of related fields that need to
+    /// stand out from the rest of the section (e.g. a block of debug-only tooling). Returns the
+    /// card body (add children to its transform).
+    /// </summary>
+    private static GameObject CreateSubGroup(Transform parent, string headerText)
+    {
+        var groupGo = new GameObject("SubGroup_" + headerText,
+            typeof(RectTransform), typeof(Image), typeof(VerticalLayoutGroup));
+        groupGo.transform.SetParent(parent, false);
+        groupGo.GetComponent<Image>().color = ColorSubGroupBg;
+
+        var vlg = groupGo.GetComponent<VerticalLayoutGroup>();
+        vlg.childControlWidth      = true;
+        vlg.childControlHeight     = true;
+        vlg.childForceExpandWidth  = true;
+        vlg.childForceExpandHeight = false;
+        vlg.spacing = 0;
+        vlg.padding = new RectOffset(20, 20, 16, 20);
+
+        groupGo.AddComponent<LayoutElement>().minHeight = 60;
+
+        var hdrGo = new GameObject("Header_" + headerText,
+            typeof(RectTransform), typeof(Text), typeof(LayoutElement));
+        hdrGo.transform.SetParent(groupGo.transform, false);
+        var ht = hdrGo.GetComponent<Text>();
+        ht.text      = headerText.ToUpper();
+        ht.font      = GetFont();
+        ht.fontSize  = 20;
+        ht.fontStyle = FontStyle.Bold;
+        ht.color     = ColorSubGroupHdr;
+        ht.alignment = TextAnchor.LowerLeft;
+        var hle = hdrGo.GetComponent<LayoutElement>();
+        hle.minHeight       = 40;
+        hle.preferredHeight = 40;
+
+        return groupGo;
+    }
+
     // ── Text ──────────────────────────────────────────────────────────────────
 
     private static Text CreateLabel(Transform parent, string text, int fontSize,
@@ -292,8 +332,9 @@ public partial class OfferwallTestUI
         le.preferredHeight = 100;
     }
 
-    /// Simple single-label button.
-    private static void CreateSimpleButton(Transform parent, string label, Color color,
+    /// Simple single-label button. Returns the Button component so callers can later toggle
+    /// interactability or update its label (e.g. while a background operation is in progress).
+    private static Button CreateSimpleButton(Transform parent, string label, Color color,
         UnityEngine.Events.UnityAction onClick)
     {
         var go = new GameObject("Button_" + label,
@@ -317,6 +358,8 @@ public partial class OfferwallTestUI
         var le = go.GetComponent<LayoutElement>();
         le.minHeight       = 70;
         le.preferredHeight = 70;
+
+        return go.GetComponent<Button>();
     }
 
     /// Two equally-wide buttons side by side.
@@ -338,6 +381,29 @@ public partial class OfferwallTestUI
         le.preferredHeight = 70;
         CreateSimpleButton(rowGo.transform, l1, c1, a1);
         CreateSimpleButton(rowGo.transform, l2, c2, a2);
+    }
+
+    /// Two equally-wide buttons side by side, returning both Button components — for callers
+    /// that need to later toggle interactability or update a button's label (e.g. while a
+    /// background operation is in progress).
+    private static void CreateHorizontalButtonPairRef(Transform parent,
+        string l1, Color c1, UnityEngine.Events.UnityAction a1, out Button button1,
+        string l2, Color c2, UnityEngine.Events.UnityAction a2, out Button button2)
+    {
+        var rowGo = new GameObject("ButtonRow",
+            typeof(RectTransform), typeof(HorizontalLayoutGroup), typeof(LayoutElement));
+        rowGo.transform.SetParent(parent, false);
+        var hlg = rowGo.GetComponent<HorizontalLayoutGroup>();
+        hlg.childControlWidth      = true;
+        hlg.childControlHeight     = true;
+        hlg.childForceExpandWidth  = true;
+        hlg.childForceExpandHeight = false;
+        hlg.spacing = 12;
+        var le = rowGo.GetComponent<LayoutElement>();
+        le.minHeight       = 70;
+        le.preferredHeight = 70;
+        button1 = CreateSimpleButton(rowGo.transform, l1, c1, a1);
+        button2 = CreateSimpleButton(rowGo.transform, l2, c2, a2);
     }
 
     // ── Version bar ───────────────────────────────────────────────────────────

@@ -37,6 +37,51 @@ public partial class OfferwallTestUI
         // Privacy Policy
         var privSection = CreateSection(c, "Privacy Policy");
 
+        // Google User Messaging Platform (UMP) consent flow — kept in its own sub-group, set
+        // apart from the manual privacy fields below, since it's debug/testing tooling rather
+        // than a value an app would ship with. "Show Consent Form" requests an update and shows
+        // whichever form currently applies: the initial consent form if one is required,
+        // otherwise the privacy options form so the user can revise a previous decision. Test
+        // Device Hashed ID(s) and Debug Geography let a physical device simulate a specific
+        // consent region during testing; UMP prints a device's hashed ID to Logcat/Console on
+        // first launch when it isn't yet registered as a test device.
+        var umpGroup = CreateSubGroup(privSection.transform, "UMP Debug Tools");
+
+        _privacyOptionsStatusLabel = CreateLabel(umpGroup.transform, "",
+            22, FontStyle.Italic, ColorGray, TextAnchor.MiddleLeft);
+        CreateSpacer(umpGroup.transform, 10);
+
+        CreateHorizontalButtonPairRef(umpGroup.transform,
+            "Show Consent Form", ColorBlue, ShowConsentAndPrivacyOptions, out _showConsentButton,
+            "Clear IAB Values",  ColorRed,  ClearIabValues,                out _);
+        _showConsentButtonLabel = _showConsentButton.GetComponentInChildren<Text>();
+        CreateSpacer(umpGroup.transform, 20);
+
+        CreateFieldLabel(umpGroup.transform, "Debug Geography");
+        _debugGeography = DebugGeographyPref.Load();
+        _refreshDebugGeography = CreateUmpDebugGeographySelector(umpGroup.transform, _debugGeography, v =>
+        {
+            _debugGeography = v;
+            DebugGeographyPref.Save(v);
+            PrimeDebugGeography();
+        });
+        CreateSpacer(umpGroup.transform, 20);
+
+        CreateFieldLabel(umpGroup.transform, "Test Device Hashed ID(s) (comma-separated)");
+        string savedTestDeviceIds = TestDeviceIdsPref.Load();
+        _testDeviceIdsInput = CreateInputField(umpGroup.transform, savedTestDeviceIds);
+        _testDeviceHashedIds = ParseTestDeviceIds(savedTestDeviceIds);
+        _testDeviceIdsInput.onValueChanged.AddListener(v =>
+        {
+            _testDeviceHashedIds = ParseTestDeviceIds(v);
+            TestDeviceIdsPref.Save(v);
+        });
+
+        RefreshPrivacyOptionsStatusLabel();
+        PrimeDebugGeography();
+
+        CreateSpacer(privSection.transform, 20);
+
         CreateFieldLabel(privSection.transform, "Subject to GDPR");
         _refreshGdpr = CreateNullableBoolSelector(privSection.transform, _subjectToGDPR, v => _subjectToGDPR = v);
         CreateSpacer(privSection.transform, 20);
@@ -53,6 +98,17 @@ public partial class OfferwallTestUI
         CreateFieldLabel(privSection.transform, "US Privacy");
         _usPrivacyInput = CreateInputField(privSection.transform, usPrivacy);
         _usPrivacyInput.onValueChanged.AddListener(v => usPrivacy = v);
+        CreateSpacer(privSection.transform, 20);
+
+        CreateFieldLabel(privSection.transform, "GPP String");
+        _gppStringInput = CreateInputField(privSection.transform, _gppString);
+        _gppStringInput.onValueChanged.AddListener(v => _gppString = v);
+        CreateSpacer(privSection.transform, 20);
+
+        CreateFieldLabel(privSection.transform, "GPP Section ID(s) (e.g. 7_8)");
+        _gppSidInput = CreateInputField(privSection.transform, _gppSid);
+        _gppSidInput.onValueChanged.AddListener(v => _gppSid = v);
+        CreateSpacer(privSection.transform, 20);
 
         CreateSpacer(c, 20);
 
@@ -520,6 +576,88 @@ public partial class OfferwallTestUI
     }
 
     /// <summary>
+    /// Four-segment control for UMP debug geography: Disabled | EEA | US State | Other.
+    /// Returns an action to programmatically update the selection without firing onChange.
+    /// </summary>
+    private System.Action<UmpDebugGeography> CreateUmpDebugGeographySelector(
+        Transform parent, UmpDebugGeography initial, System.Action<UmpDebugGeography> onChange)
+    {
+        string[] labels = { "Disabled", "EEA", "US State", "Other" };
+        UmpDebugGeography[] values = {
+            UmpDebugGeography.Disabled,
+            UmpDebugGeography.Eea,
+            UmpDebugGeography.RegulatedUsState,
+            UmpDebugGeography.Other,
+        };
+
+        var rowGo = new GameObject("SegmentedControl",
+            typeof(RectTransform), typeof(HorizontalLayoutGroup), typeof(LayoutElement));
+        rowGo.transform.SetParent(parent, false);
+
+        var hlg = rowGo.GetComponent<HorizontalLayoutGroup>();
+        hlg.childControlWidth      = true;
+        hlg.childControlHeight     = true;
+        hlg.childForceExpandWidth  = true;
+        hlg.childForceExpandHeight = true;
+        hlg.spacing = 4;
+
+        var rowLe = rowGo.GetComponent<LayoutElement>();
+        rowLe.minHeight       = 70;
+        rowLe.preferredHeight = 70;
+
+        var segImages = new Image[4];
+        var segTexts  = new Text[4];
+
+        for (int i = 0; i < 4; i++)
+        {
+            UmpDebugGeography segValue = values[i];
+            bool isActive = initial == segValue;
+
+            var segGo = new GameObject("Seg_" + labels[i],
+                typeof(RectTransform), typeof(Image), typeof(Button));
+            segGo.transform.SetParent(rowGo.transform, false);
+
+            segImages[i]       = segGo.GetComponent<Image>();
+            segImages[i].color = isActive ? ColorSegActive : ColorSegInactive;
+
+            UmpDebugGeography capturedVal = segValue;
+            segGo.GetComponent<Button>().onClick.AddListener(() =>
+            {
+                onChange(capturedVal);
+                for (int j = 0; j < 4; j++)
+                {
+                    bool active = values[j] == capturedVal;
+                    segImages[j].color = active ? ColorSegActive   : ColorSegInactive;
+                    segTexts[j].color  = active ? Color.white      : ColorGray;
+                }
+            });
+
+            var textGo = new GameObject("Label", typeof(RectTransform), typeof(Text));
+            textGo.transform.SetParent(segGo.transform, false);
+            var t = textGo.GetComponent<Text>();
+            t.text          = labels[i];
+            t.font          = GetFont();
+            t.fontSize      = 20;
+            t.fontStyle     = FontStyle.Bold;
+            t.color         = isActive ? Color.white : ColorGray;
+            t.alignment     = TextAnchor.MiddleCenter;
+            t.raycastTarget = false;
+            segTexts[i]     = t;
+            StretchToParent(textGo.GetComponent<RectTransform>());
+        }
+
+        return (newValue) =>
+        {
+            for (int j = 0; j < 4; j++)
+            {
+                bool active = values[j] == newValue;
+                segImages[j].color = active ? ColorSegActive   : ColorSegInactive;
+                segTexts[j].color  = active ? Color.white      : ColorGray;
+            }
+        };
+    }
+
+    /// <summary>
     /// Persists the chosen log level across app launches via PlayerPrefs.
     /// The key is prefixed with the package name to avoid collisions.
     /// </summary>
@@ -547,6 +685,40 @@ public partial class OfferwallTestUI
                 PlayerPrefs.SetString(Key, level.Value.ToString());
             else
                 PlayerPrefs.DeleteKey(Key);
+            PlayerPrefs.Save();
+        }
+    }
+
+    /// <summary>Persists the UMP debug geography selection across app launches via PlayerPrefs.</summary>
+    private static class DebugGeographyPref
+    {
+        private const string Key = "xsolla_offerwall_ump_debug_geography";
+
+        public static UmpDebugGeography Load()
+        {
+            var saved = PlayerPrefs.GetString(Key, string.Empty);
+            return System.Enum.TryParse(saved, out UmpDebugGeography geography)
+                ? geography
+                : UmpDebugGeography.Disabled;
+        }
+
+        public static void Save(UmpDebugGeography geography)
+        {
+            PlayerPrefs.SetString(Key, geography.ToString());
+            PlayerPrefs.Save();
+        }
+    }
+
+    /// <summary>Persists the raw comma-separated test device ID list across app launches via PlayerPrefs.</summary>
+    private static class TestDeviceIdsPref
+    {
+        private const string Key = "xsolla_offerwall_ump_test_device_ids";
+
+        public static string Load() => PlayerPrefs.GetString(Key, string.Empty);
+
+        public static void Save(string csv)
+        {
+            PlayerPrefs.SetString(Key, csv);
             PlayerPrefs.Save();
         }
     }

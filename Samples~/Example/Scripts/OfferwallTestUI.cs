@@ -19,8 +19,8 @@ public partial class OfferwallTestUI : MonoBehaviour
     // ── Inspector fields ──────────────────────────────────────────────────────
 
     [Header("Offerwall Settings")]
-    [SerializeField] private string placementId = ""; //INSERT_PLACEMENT_ID
-    [SerializeField] private string userId      = ""; //INSERT_USER_ID
+    [SerializeField] private string placementId = "905b14d4-ae75-41c1-bfbd-fdfa1960a06b"; //INSERT_PLACEMENT_ID
+    [SerializeField] private string userId      = "demo-user"; //INSERT_USER_ID
 
     [Header("Privacy Policy Defaults")]
     [SerializeField] private string userConsent = "1";
@@ -30,6 +30,13 @@ public partial class OfferwallTestUI : MonoBehaviour
 
     private bool? _subjectToGDPR;
     private bool? _belowConsentAge;
+
+    // GPP values are normally populated by a CMP/UMP consent flow writing to shared IAB
+    // storage — XsollaOfferwall.PrivacyPolicy.GppString/GppSid read that storage live — but
+    // are also editable here so they can be inspected/overridden manually, matching the
+    // Android/iOS test app UIs.
+    private string _gppString = "";
+    private string _gppSid    = "";
 
     // ── Custom parameters ─────────────────────────────────────────────────────
 
@@ -58,11 +65,24 @@ public partial class OfferwallTestUI : MonoBehaviour
     private InputField              _addPublisherUserIdInput;
     private InputField              _userConsentInput;
     private InputField              _usPrivacyInput;
+    private InputField              _gppStringInput;
+    private InputField              _gppSidInput;
+    private Text                    _privacyOptionsStatusLabel;
     private Text                    _androidDeviceIdLabel;
     private System.Action<bool?>                                 _refreshGdpr;
     private System.Action<bool?>                                 _refreshBelowAge;
     private System.Action<Xsolla.Offerwall.OfferwallLogLevel?>   _refreshLogLevel;
     private System.Action<Xsolla.Offerwall.OfferwallOrientation> _refreshOrientation;
+
+    // ── UI refs — UMP consent (Settings screen) ───────────────────────────────
+
+    private InputField                    _testDeviceIdsInput;
+    private List<string>                  _testDeviceHashedIds = new List<string>();
+    private UmpDebugGeography             _debugGeography = UmpDebugGeography.Disabled;
+    private System.Action<UmpDebugGeography> _refreshDebugGeography;
+    private Button                        _showConsentButton;
+    private Text                          _showConsentButtonLabel;
+    private bool                          _isPrimingDebugGeography;
 
     // ── Version UI ────────────────────────────────────────────────────────────
 
@@ -95,6 +115,8 @@ public partial class OfferwallTestUI : MonoBehaviour
     private static readonly Color ColorTabInactive = new Color(0.95f, 0.95f, 0.97f);
     private static readonly Color ColorSegActive   = new Color(0.20f, 0.50f, 1.00f);
     private static readonly Color ColorSegInactive = new Color(0.82f, 0.82f, 0.85f);
+    private static readonly Color ColorSubGroupBg  = new Color(0.92f, 0.94f, 0.99f);
+    private static readonly Color ColorSubGroupHdr = new Color(0.30f, 0.40f, 0.65f);
 
     // ── Bootstrap ─────────────────────────────────────────────────────────────
 
@@ -105,7 +127,10 @@ public partial class OfferwallTestUI : MonoBehaviour
         new GameObject("OfferwallTestUI").AddComponent<OfferwallTestUI>();
     }
 
-    private void Awake() => BuildUI();
+    private void Awake()
+    {
+        BuildUI();
+    }
 
     // ── Top-level build ───────────────────────────────────────────────────────
 

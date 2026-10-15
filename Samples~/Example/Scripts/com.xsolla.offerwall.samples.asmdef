@@ -5,7 +5,8 @@
     "Xsolla.Offerwall",
     "UnityEngine.UI",
     "UnityEngine.EventSystemsModule",
-    "Unity.Advertisement.IosSupport"
+    "Unity.Advertisement.IosSupport",
+    "GoogleMobileAds"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],
@@ -19,6 +20,11 @@
       "name": "com.unity.ads.ios-support",
       "expression": "1.0.0",
       "define": "IOS_SUPPORT_AVAILABLE"
+    },
+    {
+      "name": "com.google.ads.mobile",
+      "expression": "1.0.0",
+      "define": "GMA_AVAILABLE"
     }
   ],
   "noEngineReferences": false

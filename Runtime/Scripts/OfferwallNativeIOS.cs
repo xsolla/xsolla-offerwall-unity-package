@@ -14,7 +14,9 @@ namespace Xsolla.Offerwall
     {
         private const string Tag = "XsollaOfferwall.iOS";
 
-        private static Action<string> _pendingCallback;
+        private static Action _pendingOnOpened;
+        private static Action<XOError> _pendingOnError;
+        private static Action _pendingOnClosed;
         private static Action<XOError> _pendingConnectCallback;
 
         [DllImport("__Internal")]
@@ -24,7 +26,9 @@ namespace Xsolla.Offerwall
         private static extern void _XsollaOfferwall_Show(
             string placementId,
             string customParamsJson,
-            DismissCallbackDelegate callback
+            OpenedCallbackDelegate onOpened,
+            ErrorCallbackDelegate onError,
+            ClosedCallbackDelegate onClosed
         );
 
         [DllImport("__Internal")]
@@ -32,7 +36,9 @@ namespace Xsolla.Offerwall
             int subjectToGDPR,
             string userConsent,
             int belowConsentAge,
-            string usPrivacy
+            string usPrivacy,
+            string gppString,
+            string gppSid
         );
 
         [DllImport("__Internal")]
@@ -49,7 +55,9 @@ namespace Xsolla.Offerwall
             out int subjectToGDPR,
             out IntPtr userConsent,
             out int belowConsentAge,
-            out IntPtr usPrivacy
+            out IntPtr usPrivacy,
+            out IntPtr gppString,
+            out IntPtr gppSid
         );
 
         [DllImport("__Internal")]
@@ -65,7 +73,9 @@ namespace Xsolla.Offerwall
         private static extern IntPtr _XsollaOfferwall_GetVersion();
 
         private delegate void ConnectCallbackDelegate(string error);
-        private delegate void DismissCallbackDelegate(string error);
+        private delegate void OpenedCallbackDelegate();
+        private delegate void ErrorCallbackDelegate(string error);
+        private delegate void ClosedCallbackDelegate();
 
         [MonoPInvokeCallback(typeof(ConnectCallbackDelegate))]
         private static void OnConnected(string error)
@@ -76,12 +86,35 @@ namespace Xsolla.Offerwall
             MainThreadDispatcher.Enqueue(() => callback?.Invoke(xoError));
         }
 
-        [MonoPInvokeCallback(typeof(DismissCallbackDelegate))]
-        private static void OnDismissed(string error)
+        [MonoPInvokeCallback(typeof(OpenedCallbackDelegate))]
+        private static void OnOpened()
         {
-            var callback = _pendingCallback;
-            _pendingCallback = null;
-            MainThreadDispatcher.Enqueue(() => callback?.Invoke(error));
+            var callback = _pendingOnOpened;
+            MainThreadDispatcher.Enqueue(() => callback?.Invoke());
+        }
+
+        [MonoPInvokeCallback(typeof(ErrorCallbackDelegate))]
+        private static void OnError(string error)
+        {
+            var callback = _pendingOnError;
+            ClearPendingShowCallbacks();
+            var xoError = new XOError(error);
+            MainThreadDispatcher.Enqueue(() => callback?.Invoke(xoError));
+        }
+
+        [MonoPInvokeCallback(typeof(ClosedCallbackDelegate))]
+        private static void OnClosed()
+        {
+            var callback = _pendingOnClosed;
+            ClearPendingShowCallbacks();
+            MainThreadDispatcher.Enqueue(() => callback?.Invoke());
+        }
+
+        private static void ClearPendingShowCallbacks()
+        {
+            _pendingOnOpened = null;
+            _pendingOnError = null;
+            _pendingOnClosed = null;
         }
 
         public OfferwallSettings GetSettings()
@@ -105,8 +138,6 @@ namespace Xsolla.Offerwall
                     6 => OfferwallLogLevel.Error,
                     _ => null,
                 },
-                // openExternalLinksInBrowser not readable from iOS — return cached value
-                OpenExternalLinksInBrowser = true,
             };
         }
 
@@ -139,15 +170,22 @@ namespace Xsolla.Offerwall
             _XsollaOfferwall_Connect(OnConnected);
         }
 
-        public void Show(string placementId, Dictionary<string, string> customParams, Action<string> onDismissed)
+        public void Show(
+            string placementId,
+            Dictionary<string, string> customParams,
+            Action onOpened,
+            Action<XOError> onError,
+            Action onClosed)
         {
-            _pendingCallback = onDismissed;
+            _pendingOnOpened = onOpened;
+            _pendingOnError = onError;
+            _pendingOnClosed = onClosed;
 
             string customParamsJson = null;
             if (customParams != null && customParams.Count > 0)
                 customParamsJson = DictToJson(customParams);
 
-            _XsollaOfferwall_Show(placementId, customParamsJson, OnDismissed);
+            _XsollaOfferwall_Show(placementId, customParamsJson, OnOpened, OnError, OnClosed);
         }
 
         public void SetUserId(string userId)
@@ -191,7 +229,8 @@ namespace Xsolla.Offerwall
         {
             _XsollaOfferwall_GetPrivacyPolicy(
                 out int gdprInt, out IntPtr userConsentPtr,
-                out int belowAgeInt, out IntPtr usPrivacyPtr);
+                out int belowAgeInt, out IntPtr usPrivacyPtr,
+                out IntPtr gppStringPtr, out IntPtr gppSidPtr);
 
             return new OfferwallPrivacyPolicy
             {
@@ -199,6 +238,8 @@ namespace Xsolla.Offerwall
                 BelowConsentAge = belowAgeInt >= 0 ? belowAgeInt == 1 : (bool?)null,
                 UserConsent     = userConsentPtr != IntPtr.Zero ? Marshal.PtrToStringUTF8(userConsentPtr) : null,
                 UsPrivacy       = usPrivacyPtr   != IntPtr.Zero ? Marshal.PtrToStringUTF8(usPrivacyPtr)   : null,
+                GppString       = gppStringPtr  != IntPtr.Zero ? Marshal.PtrToStringUTF8(gppStringPtr)    : null,
+                GppSid          = gppSidPtr     != IntPtr.Zero ? Marshal.PtrToStringUTF8(gppSidPtr)       : null,
             };
         }
 
@@ -208,7 +249,9 @@ namespace Xsolla.Offerwall
                 pp.SubjectToGDPR.HasValue  ? (pp.SubjectToGDPR.Value  ? 1 : 0) : -1,
                 pp.UserConsent,
                 pp.BelowConsentAge.HasValue ? (pp.BelowConsentAge.Value ? 1 : 0) : -1,
-                pp.UsPrivacy
+                pp.UsPrivacy,
+                pp.GppString,
+                pp.GppSid
             );
         }
 

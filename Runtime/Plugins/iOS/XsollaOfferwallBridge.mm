@@ -4,11 +4,15 @@
 
 // Unity callback function pointer types
 typedef void (*OfferwallConnectCallback)(const char* error);
-typedef void (*OfferwallDismissCallback)(const char* error);
+typedef void (*OfferwallOpenedCallback)(void);
+typedef void (*OfferwallErrorCallback)(const char* error);
+typedef void (*OfferwallClosedCallback)(void);
 
 // Store callbacks so they persist across async calls
 static OfferwallConnectCallback g_connectCallback = NULL;
-static OfferwallDismissCallback g_dismissCallback = NULL;
+static OfferwallOpenedCallback g_openedCallback = NULL;
+static OfferwallErrorCallback g_errorCallback = NULL;
+static OfferwallClosedCallback g_closedCallback = NULL;
 
 extern "C" {
 
@@ -33,7 +37,6 @@ extern "C" {
 
     // orientation: 0=portrait, 1=landscape, 2=unspecified/all
     // logLevel: XMOLogLevel raw value (verbose=0 .. error=6), -1 = platform default
-    // openExternalLinksInBrowser: not directly exposed on iOS, ignored
     void _XsollaOfferwall_SetSettings(int orientation, int logLevel) {
         // Apply synchronously on whatever thread calls us (matching the ObjC test app pattern
         // where logLevelChanged: sets settings directly on the main thread). Using dispatch_async
@@ -76,11 +79,15 @@ extern "C" {
     void _XsollaOfferwall_Show(
         const char* placementId,
         const char* customParamsJson,
-        OfferwallDismissCallback callback
+        OfferwallOpenedCallback onOpened,
+        OfferwallErrorCallback onError,
+        OfferwallClosedCallback onClosed
     ) {
         NSString* placementIdStr = [NSString stringWithUTF8String:placementId];
 
-        g_dismissCallback = callback;
+        g_openedCallback = onOpened;
+        g_errorCallback = onError;
+        g_closedCallback = onClosed;
 
         dispatch_async(dispatch_get_main_queue(), ^{
             // Parse custom parameters if provided
@@ -102,20 +109,33 @@ extern "C" {
                 }
             }
 
-            void (^completion)(NSError*) = ^(NSError* error) {
-                if (g_dismissCallback) {
-                    g_dismissCallback(error ? [error.localizedDescription UTF8String] : NULL);
-                    g_dismissCallback = NULL;
-                }
+            void (^opened)(void) = ^{
+                if (g_openedCallback) g_openedCallback();
+            };
+            void (^error)(NSError*) = ^(NSError* err) {
+                if (g_errorCallback) g_errorCallback([err.localizedDescription UTF8String]);
+                g_openedCallback = NULL;
+                g_errorCallback = NULL;
+                g_closedCallback = NULL;
+            };
+            void (^closed)(void) = ^{
+                if (g_closedCallback) g_closedCallback();
+                g_openedCallback = NULL;
+                g_errorCallback = NULL;
+                g_closedCallback = NULL;
             };
 
             if (customParams) {
                 [[XMOfferwallManager shared] showWithPlacementId:placementIdStr
                                              customQueryParameters:customParams
-                                                       completion:completion];
+                                                        onOpened:opened
+                                                         onError:error
+                                                        onClosed:closed];
             } else {
                 [[XMOfferwallManager shared] showWithPlacementId:placementIdStr
-                                                       completion:completion];
+                                                        onOpened:opened
+                                                         onError:error
+                                                        onClosed:closed];
             }
         });
     }
@@ -125,17 +145,23 @@ extern "C" {
         int subjectToGDPR,
         const char* userConsent,
         int belowConsentAge,
-        const char* usPrivacy
+        const char* usPrivacy,
+        const char* gppString,
+        const char* gppSid
     ) {
         // Capture string values before dispatch (caller stack may be gone by async time)
         NSString* userConsentStr = userConsent ? [NSString stringWithUTF8String:userConsent] : nil;
         NSString* usPrivacyStr   = usPrivacy   ? [NSString stringWithUTF8String:usPrivacy]   : nil;
+        NSString* gppStringStr   = gppString   ? [NSString stringWithUTF8String:gppString]   : nil;
+        NSString* gppSidStr      = gppSid      ? [NSString stringWithUTF8String:gppSid]      : nil;
         void (^apply)(void) = ^{
             XMOPrivacyPolicy* pp = [XMOfferwallManager shared].privacyPolicy;
             pp.subjectToGDPR   = subjectToGDPR   >= 0 ? @(subjectToGDPR   == 1) : nil;
             pp.belowConsentAge = belowConsentAge >= 0 ? @(belowConsentAge == 1) : nil;
             pp.userConsent     = userConsentStr;
             pp.usPrivacy       = usPrivacyStr;
+            pp.gppString       = gppStringStr;
+            pp.gppSid          = gppSidStr;
         };
         if ([NSThread isMainThread]) apply();
         else dispatch_sync(dispatch_get_main_queue(), apply);
@@ -155,7 +181,9 @@ extern "C" {
         int* outSubjectToGDPR,
         char** outUserConsent,
         int* outBelowConsentAge,
-        char** outUsPrivacy
+        char** outUsPrivacy,
+        char** outGppString,
+        char** outGppSid
     ) {
         void (^read)(void) = ^{
             XMOPrivacyPolicy* pp = [XMOfferwallManager shared].privacyPolicy;
@@ -163,6 +191,8 @@ extern "C" {
             *outBelowConsentAge = pp.belowConsentAge  ? (pp.belowConsentAge.boolValue ? 1 : 0) : -1;
             *outUserConsent = pp.userConsent ? strdup([pp.userConsent UTF8String]) : NULL;
             *outUsPrivacy   = pp.usPrivacy   ? strdup([pp.usPrivacy   UTF8String]) : NULL;
+            *outGppString   = pp.gppString   ? strdup([pp.gppString   UTF8String]) : NULL;
+            *outGppSid      = pp.gppSid      ? strdup([pp.gppSid      UTF8String]) : NULL;
         };
         if ([NSThread isMainThread]) read();
         else dispatch_sync(dispatch_get_main_queue(), read);

@@ -16,12 +16,19 @@ namespace Xsolla.Offerwall.Editor
     /// </summary>
     public class XsollaOfferwallSettingsWindow : EditorWindow
     {
+        private string _edmVersion;
+
         [MenuItem("Window/Xsolla Offerwall/Settings")]
         public static void Open()
         {
             var window = GetWindow<XsollaOfferwallSettingsWindow>(utility: false, title: "Offerwall Settings");
-            window.minSize = new Vector2(340, 380);
+            window.minSize = new Vector2(340, 400);
             window.Show();
+        }
+
+        private void OnEnable()
+        {
+            _edmVersion = EdmVersionHelper.GetInstalledVersion() ?? "Not installed";
         }
 
         private void OnGUI()
@@ -34,6 +41,7 @@ namespace Xsolla.Offerwall.Editor
             using (new EditorGUI.DisabledScope(true))
             {
                 EditorGUILayout.TextField("Version", XsollaOfferwallVersion.UnityVersion);
+                EditorGUILayout.TextField("EDM Version", _edmVersion);
             }
 
             EditorGUILayout.Space(12);
@@ -102,7 +110,22 @@ namespace Xsolla.Offerwall.Editor
                 current);
 
             if (next != current)
-                XsollaOfferwallEditorSettings.IOSIntegration = next;
+            {
+                if (next == IOSIntegrationMode.SwiftPackageManager && !EdmVersionHelper.MeetsMinimumSpmRequirement())
+                {
+                    string installed = EdmVersionHelper.GetInstalledVersion();
+                    EditorUtility.DisplayDialog(
+                        "EDM Version Too Low for Swift Package Manager",
+                        $"Swift Package Manager requires External Dependency Manager {EdmVersionHelper.MinimumSpmVersion} or later.\n\n" +
+                        $"The installed version is {installed}.\n\n" +
+                        "Update EDM via Window → Package Manager, then switch to Swift Package Manager.",
+                        "OK");
+                }
+                else
+                {
+                    XsollaOfferwallEditorSettings.IOSIntegration = next;
+                }
+            }
 
             string version    = XsollaOfferwallEditorSettings.IOSVersion;
             string newVersion = EditorGUILayout.DelayedTextField(
@@ -114,6 +137,19 @@ namespace Xsolla.Offerwall.Editor
 
             if (newVersion != version)
                 XsollaOfferwallEditorSettings.IOSVersion = newVersion;
+
+            EditorGUILayout.Space(4);
+
+            bool skip    = EdmVersionHelper.SkipVersionCheck;
+            bool newSkip = EditorGUILayout.Toggle(
+                new GUIContent(
+                    "Skip EDM Version Check",
+                    "Disables the minimum EDM version checks for Swift Package Manager. " +
+                    "Enable this if you are managing EDM separately and want to suppress the warnings."),
+                skip);
+
+            if (newSkip != skip)
+                EdmVersionHelper.SkipVersionCheck = newSkip;
         }
 
         private static void DrawAppSetIdSection()
